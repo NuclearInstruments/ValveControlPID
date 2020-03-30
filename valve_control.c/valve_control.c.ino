@@ -62,7 +62,13 @@ void loop() {
   static float pid_prec=0;
   static float pid_out=0;
   static bool state = false;
-
+  static long int breathing_cycle_count = 0;
+  static float previous_best_pid_out = 0;
+  static float overshoot_of_previous_best_pid_out = 1.1; /*just a guess, will need to be tuned.
+                                                          I imagine the system will like the valve to be initially
+                                                          slightly more open in the beggining of the cycle*/
+  static float new_cycle_dac_set_val; 
+  static long int initial_open_wait_ms = 300;
 
   static float Pset = 0;
   float Pmeas = 0;
@@ -78,6 +84,13 @@ void loop() {
     if (state == false)
     {
       Pset=20;
+      if (breathing_cycle_count > 0)
+      {
+        new_cycle_dac_set_val = overshoot_of_previous_best_pid_out * previous_best_pid_out;
+        dacWrite(DAC1, new_cycle_dac_set_val);
+        delay(initial_open_wait_ms); /*this will for sure need to be optimized to some more optimal value 
+                     giving the system enough time (and not too long) to react before the first pressure sensor read below*/ 
+      }
     }
     else
     {
@@ -102,7 +115,13 @@ void loop() {
    pid_prec = pid_error;
   
   dacWrite(DAC1, pid_out);
-
+  if (state == true) /*keep recording the latest pid_out value in the inhalation cycle
+                     last one should be the "best" for the next inhalation cycle*/
+  {
+    previous_best_pid_out = pid_out;
+  }
+  breathing_cycle_count++;
+  
   Serial.println(String(Pset) + "," + String(Pmeas) + "," + String(pid_out) + "," + String(0) + "," + String(pid_error));
  
   /*for (int i=0;i<DAC_CONV;i++){
